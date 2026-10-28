@@ -2,6 +2,7 @@
 // call so the mapping can be unit tested.
 import { BW_FILTERS, HSL_COLORS } from '../state/defaults.js';
 import { curvesAreIdentity } from '../edit/curves.js';
+import { toGlMat3, toMat3 } from './geometry.js';
 
 const unit = (v) => v / 100;
 const clamp = (v, min = -1, max = 1) => Math.min(max, Math.max(min, v));
@@ -60,6 +61,7 @@ export function developUniforms(edit) {
     uSaturation: clamp(unit(tune.saturation) + 0.25 * unit(hdr.saturation) * hdrStrength, -1, 1.5),
     uVibrance: clamp(unit(tune.vibrance) + 0.3 * ambiance),
     uStructure: clamp(unit(details.structure) + 0.1 * Math.max(0, ambiance)),
+    uDehaze: unit(details.dehaze),
     uHdr: [hdrStrength, unit(hdr.detail), unit(hdr.spread), 0],
     uGlow: unit(effects.glow),
     uHslOn: hslOn,
@@ -117,16 +119,32 @@ export function healUniforms(spots, aspect, longSide) {
   };
 }
 
+export function lensIsActive(edit) {
+  return edit.lens.blur > 0 && !edit.stencil.enabled;
+}
+
 export function outputUniforms(edit, options) {
-  const { effects, details } = edit;
-  const { flipY, original, width, height, texel, toSource } = options;
-  const vignette = unit(effects.vignette);
+  const { effects, details, lens, stencil } = edit;
+  const { flipY, original, width, height, texel, geometry } = options;
+  // A stencil is line art: photographic effects would only dirty it.
+  const photo = stencil.enabled ? 0 : 1;
+  const vignette = unit(effects.vignette) * photo;
   return {
-    uMatrix: toSource,
+    uMatrix: toMat3(geometry.matrix),
+    uWarp: toGlMat3(geometry.homography),
+    uBend: geometry.bend,
     uFlipY: flipY,
     uOriginal: original,
     uTexel: texel,
-    uSharpen: unit(details.sharpen) * 2.2,
+    uSharpen: unit(details.sharpen) * 2.2 * photo,
+    uLens: [
+      lensIsActive(edit) ? unit(lens.blur) : 0,
+      0.02 + unit(lens.size) * 0.6,
+      0.03 + unit(lens.transition) * 0.8,
+      lens.shape === 'linear' ? 1 : 0,
+    ],
+    uLensFocus: [lens.x, lens.y, (lens.angle * Math.PI) / 180],
+    uAberration: unit(lens.aberration) * 0.006 * photo,
     uVignette: [
       vignette < 0 ? vignette * 0.85 : vignette * 0.7,
       0.45 + unit(effects.vignetteSize) * 0.9,
@@ -134,7 +152,16 @@ export function outputUniforms(edit, options) {
       0,
     ],
     uVignetteCenter: [effects.vignetteX, effects.vignetteY],
-    uGrain: [unit(effects.grain), 1600 - unit(effects.grainSize) * 1250],
+    uGrain: [unit(effects.grain) * photo, 1600 - unit(effects.grainSize) * 1250],
     uOutSize: [width, height],
+  };
+}
+
+export function stencilUniforms(stencil, texel) {
+  return {
+    uTexel: texel,
+    uThreshold: 0.35 + unit(stencil.threshold) * 0.55,
+    uThickness: unit(stencil.thickness) * 6,
+    uTransparent: stencil.transparent,
   };
 }

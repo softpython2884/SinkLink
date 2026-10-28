@@ -27,7 +27,7 @@ export const IDENTITY_CURVE = [[0, 0], [1, 1]];
 
 // Sections that describe the global look of the photo, as opposed to geometry
 // and local retouching. Looks replace these and nothing else.
-export const GLOBAL_SECTIONS = ['tune', 'details', 'hdr', 'effects', 'hsl', 'split', 'bw', 'curves'];
+export const GLOBAL_SECTIONS = ['tune', 'details', 'hdr', 'effects', 'lens', 'hsl', 'split', 'bw', 'curves'];
 
 export const DEFAULT_EDIT = deepFreeze({
   tune: {
@@ -47,6 +47,7 @@ export const DEFAULT_EDIT = deepFreeze({
   details: {
     structure: 0,
     sharpen: 0,
+    dehaze: 0,
   },
   hdr: {
     strength: 0,
@@ -63,6 +64,17 @@ export const DEFAULT_EDIT = deepFreeze({
     vignetteY: 0.5,
     grain: 0,
     grainSize: 30,
+  },
+  lens: {
+    blur: 0,
+    shape: 'radial',
+    x: 0.5,
+    y: 0.5,
+    size: 30,
+    transition: 40,
+    angle: 0,
+    bokeh: 30,
+    aberration: 0,
   },
   hsl: Object.fromEntries(
     HSL_COLORS.map(({ id }) => [id, { hue: 0, saturation: 0, luminance: 0 }]),
@@ -93,6 +105,16 @@ export const DEFAULT_EDIT = deepFreeze({
     rotate: 0,
     flip: false,
     aspect: null,
+    quad: null,
+    bend: 0,
+    bendAxis: 'x',
+  },
+  stencil: {
+    enabled: false,
+    threshold: 50,
+    smoothing: 25,
+    thickness: 0,
+    transparent: false,
   },
   zones: [],
   heal: [],

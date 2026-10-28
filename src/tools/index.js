@@ -5,7 +5,9 @@ import { CurvesTool } from './curves.js';
 import { EffectsTool } from './effects.js';
 import { HealTool } from './heal.js';
 import { LocalTool } from './local.js';
+import { LensTool } from './lens.js';
 import { LooksTool } from './looks.js';
+import { StencilTool } from './stencil.js';
 import { BW_FILTERS } from '../state/defaults.js';
 import { setIn } from '../state/path.js';
 
@@ -49,6 +51,7 @@ const DETAILS = {
       controls: [
         { path: 'details.structure', label: 'Structure' },
         { path: 'details.sharpen', label: 'Netteté', min: 0, max: 100 },
+        { path: 'details.dehaze', label: 'Anti-voile' },
       ],
     },
   ],
@@ -114,9 +117,11 @@ export function createTools(app) {
     new ColorTool(app),
     new AdjustTool(app, HDR),
     new EffectsTool(app),
+    new LensTool(app),
     new AdjustTool(app, BW),
     new CropTool(app),
     new LocalTool(app),
     new HealTool(app),
+    new StencilTool(app),
   ];
 }

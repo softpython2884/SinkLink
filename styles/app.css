@@ -712,6 +712,12 @@ button {
   font-size: 12px;
 }
 
+.hint--lead {
+  margin: 4px 0 6px;
+  color: var(--muted);
+  font-size: 13px;
+}
+
 .field {
   display: flex;
   flex-direction: column;

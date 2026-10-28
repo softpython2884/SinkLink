@@ -36,6 +36,10 @@ const PATHS = {
   fit: '<path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/>',
   close: '<path d="m6 6 12 12M18 6 6 18"/>',
   code: '<path d="m8 8-5 4 5 4M16 8l5 4-5 4M14 4l-4 16"/>',
+  check: '<path d="m5 12.5 4.5 4.5L19 7.5"/>',
+  perspective: '<path d="M7 4h10l4 16H3z"/><path d="M12 4v16M5 12h14" opacity=".55"/>',
+  lens: '<path d="M4 8h3l2-3h6l2 3h3a1 1 0 0 1 1 1v9a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V9a1 1 0 0 1 1-1z"/><circle cx="12" cy="13" r="4"/>',
+  stencil: '<path d="M12 20 5.5 12.5 8 4h8l2.5 8.5z"/><path d="M12 20v-7"/><circle cx="12" cy="11" r="1.6"/>',
 };
 
 export function icon(name, className = 'icon') {

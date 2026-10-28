@@ -1,7 +1,7 @@
 import { Tool } from './tool.js';
 import { createSlider } from '../ui/slider.js';
 import { h } from '../ui/dom.js';
-import { LOOKS, applyLook } from '../edit/presets.js';
+import { LOOKS, LOOK_GROUPS, applyLook } from '../edit/presets.js';
 import { autoTune } from '../edit/auto.js';
 
 const AUTO = { id: 'auto', label: 'Auto', auto: true };
@@ -21,14 +21,20 @@ export class LooksTool extends Tool {
 
   mount(el) {
     this.cards = new Map();
-    const grid = h('div', { class: 'looks' });
-    for (const look of [AUTO, ...LOOKS]) {
+    const card = (look) => {
       const canvas = h('canvas', { class: 'look__thumb', width: 1, height: 1 });
-      const card = h('button', { class: 'look', type: 'button', onClick: () => this.#select(look) },
+      const button = h('button', { class: 'look', type: 'button', onClick: () => this.#select(look) },
         canvas, h('span', { class: 'look__label' }, look.label));
-      this.cards.set(look.id, { card, canvas, look });
-      grid.append(card);
-    }
+      this.cards.set(look.id, { card: button, canvas, look });
+      return button;
+    };
+    const groups = LOOK_GROUPS.map(({ id, label }) => {
+      const looks = LOOKS.filter((look) => look.group === id);
+      if (id === 'essentials') looks.unshift(AUTO);
+      return h('section', { class: 'section' },
+        h('h3', { class: 'section__title' }, label),
+        h('div', { class: 'looks' }, looks.map(card)));
+    });
     this.slider = createSlider({
       label: 'Intensité',
       min: 0,
@@ -42,8 +48,8 @@ export class LooksTool extends Tool {
       onChange: () => this.app.commit(),
     });
     el.append(
-      h('section', { class: 'section' }, grid),
       h('section', { class: 'section' }, this.slider.el, h('p', { class: 'hint' }, this.hint)),
+      ...groups,
     );
     this.#refresh();
     this.#renderThumbnails();

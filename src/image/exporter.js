@@ -4,9 +4,9 @@ import { Renderer } from '../render/renderer.js';
 import { scaledCanvas } from './loader.js';
 
 export const EXPORT_FORMATS = {
-  jpeg: { mime: 'image/jpeg', extension: 'jpg', label: 'JPEG', lossy: true },
-  webp: { mime: 'image/webp', extension: 'webp', label: 'WebP', lossy: true },
-  png: { mime: 'image/png', extension: 'png', label: 'PNG', lossy: false },
+  jpeg: { mime: 'image/jpeg', extension: 'jpg', label: 'JPEG', lossy: true, alpha: false },
+  webp: { mime: 'image/webp', extension: 'webp', label: 'WebP', lossy: true, alpha: true },
+  png: { mime: 'image/png', extension: 'png', label: 'PNG', lossy: false, alpha: true },
 };
 
 export async function exportImage(image, edit, { format = 'jpeg', quality = 0.92, maxSize = Infinity } = {}) {
@@ -23,12 +23,25 @@ export async function exportImage(image, edit, { format = 'jpeg', quality = 0.92
     renderer.dispose();
   }
 
+  const { mime, extension, alpha } = EXPORT_FORMATS[format];
   const out = document.createElement('canvas');
   out.width = result.width;
   out.height = result.height;
-  out.getContext('2d').putImageData(new ImageData(result.data, result.width, result.height), 0, 0);
+  const ctx = out.getContext('2d');
+  const imageData = new ImageData(result.data, result.width, result.height);
+  if (alpha) {
+    ctx.putImageData(imageData, 0, 0);
+  } else {
+    // JPEG has no transparency: put a transparent stencil on white paper.
+    const layer = document.createElement('canvas');
+    layer.width = result.width;
+    layer.height = result.height;
+    layer.getContext('2d').putImageData(imageData, 0, 0);
+    ctx.fillStyle = '#fff';
+    ctx.fillRect(0, 0, out.width, out.height);
+    ctx.drawImage(layer, 0, 0);
+  }
 
-  const { mime, extension } = EXPORT_FORMATS[format];
   const blob = await new Promise((resolve, reject) => {
     out.toBlob((b) => (b ? resolve(b) : reject(new Error('Encodage impossible'))), mime, quality);
   });

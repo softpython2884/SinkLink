@@ -2,7 +2,7 @@ import { Store } from './state/store.js';
 import { DEFAULT_EDIT } from './state/defaults.js';
 import { setIn } from './state/path.js';
 import { Renderer } from './render/renderer.js';
-import { apply, outputGeometry } from './render/geometry.js';
+import { outputGeometry } from './render/geometry.js';
 import { Viewport } from './ui/viewport.js';
 import { Hud, toast } from './ui/feedback.js';
 import { Histogram } from './ui/histogram.js';
@@ -149,9 +149,9 @@ export class App {
       h,
       geometry,
       unit: Math.max(width, height) * geometry.scale * scale,
-      toSource: (p) => apply(geometry.toSource, p.x, p.y),
+      toSource: (p) => geometry.toSource(p.x, p.y),
       toScreen: (u, v) => {
-        const [x, y] = apply(geometry.fromSource, u, v);
+        const [x, y] = geometry.fromSource(u, v);
         return [x * w, y * h];
       },
     };

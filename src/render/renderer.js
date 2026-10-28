@@ -1,10 +1,10 @@
 // Rendering pipeline.
 //
-//   source ─ heal ─┬──────────── develop ── local × N ── output ─ canvas / pixels
-//                  └ blur S/M/L ─┘
+//   source ─ heal ─┬──────────── develop ── local × N ── [stencil] ─┬────── output ─ canvas / pixels
+//                  └ blur S/M/L ─┘                                 └ [lens blur] ┘
 //
 // The source and its blurred copies only change with the image or the healing
-// spots. Moving a slider re-runs develop, the local passes and output.
+// spots. Moving a slider re-runs everything from develop on.
 import {
   Program,
   createImageTexture,
@@ -18,11 +18,13 @@ import {
   MAX_HEAL_SPOTS,
   developUniforms,
   healUniforms,
+  lensIsActive,
   localUniforms,
   outputUniforms,
+  stencilUniforms,
   zoneIsNeutral,
 } from './uniforms.js';
-import { outputGeometry, toMat3 } from './geometry.js';
+import { outputGeometry } from './geometry.js';
 import { buildCurveLut } from '../edit/curves.js';
 import { MaskCache } from './masks.js';
 
@@ -32,6 +34,12 @@ const BLUR_LEVELS = [
   { name: 'uBlurS', sigma: 0.0025, pixels: 4 },
   { name: 'uBlurM', sigma: 0.012, pixels: 8 },
   { name: 'uBlurL', sigma: 0.05, pixels: 8 },
+];
+
+// Lens blur: a light and a strong level, mixed according to the focus mask.
+const LENS_LEVELS = [
+  { name: 'uLensNear', sigma: 0.004, pixels: 4 },
+  { name: 'uLensFar', sigma: 0.014, pixels: 6 },
 ];
 
 export class Renderer {
@@ -60,11 +68,15 @@ export class Renderer {
       develop: new Program(gl, glsl.VERTEX, glsl.DEVELOP),
       local: new Program(gl, glsl.VERTEX, glsl.LOCAL),
       output: new Program(gl, glsl.VERTEX, glsl.OUTPUT),
+      bokeh: new Program(gl, glsl.VERTEX, glsl.BOKEH),
+      maxPool: new Program(gl, glsl.VERTEX, glsl.MAX_POOL),
+      stencil: new Program(gl, glsl.VERTEX, glsl.STENCIL),
     };
     this.curve = { key: null, texture: createTexture(gl, { width: 256, height: 1 }) };
     this.emptyMask = createTexture(gl, { width: 1, height: 1, data: new Uint8Array(4) });
     this.masks = new MaskCache(gl, maskSize);
     this.targets = new Map();
+    this.scratch = new Map();
     this.source = null;
     this.prepared = null;
   }
@@ -90,8 +102,8 @@ export class Renderer {
     };
   }
 
-  geometry(edit, { frame = false } = {}) {
-    return outputGeometry(edit.crop, this.source.width, this.source.height, { frame });
+  geometry(edit, { frame = false, raw = false } = {}) {
+    return outputGeometry(edit.crop, this.source.width, this.source.height, { frame, raw });
   }
 
   // Draws to the canvas, resizing it to the output size when needed.
@@ -127,7 +139,7 @@ export class Renderer {
     }
   }
 
-  #draw(edit, geometry, target, width, height, scale, { original = false, maskZone = null }) {
+  #draw(edit, geometry, target, width, height, scale, { original = false, raw = false, maskZone = null }) {
     const { source } = this;
     const prepared = this.#prepare(edit.heal);
     let result = null;
@@ -164,8 +176,15 @@ export class Renderer {
         });
         [current, spare] = [spare, current];
       }
+      if (edit.stencil.enabled && !raw) {
+        [current, spare] = [this.#stencil(edit.stencil, current, spare), current];
+      }
       result = current.texture;
     }
+
+    const lens = !original && lensIsActive(edit)
+      ? this.#lensBlur(result, edit.lens, processWidth, processHeight)
+      : { uLensNear: this.emptyMask, uLensFar: this.emptyMask };
 
     // Sharpening radius follows the image size so the preview matches the export.
     const radius = Math.max(1, Math.max(processWidth, processHeight) / 2048);
@@ -175,11 +194,87 @@ export class Renderer {
       width,
       height,
       texel: [radius / processWidth, radius / processHeight],
-      toSource: toMat3(geometry.toSource),
+      geometry,
     }), {
       uImage: result ?? source.texture,
       uSrc: source.texture,
+      ...lens,
     }, width, height);
+  }
+
+  // Line art: smooth, estimate the skin brightness with a max-pool pyramid, then
+  // threshold the luminance relative to it.
+  #stencil(settings, current, spare) {
+    const { width, height } = current;
+    const long = Math.max(width, height);
+    let image = current;
+    const sigma = (settings.smoothing / 100) * 0.0025 * long;
+    if (sigma >= 0.5) {
+      const smooth = this.#scratchTarget('stencil-smooth', width, height);
+      this.#blur(current, spare, smooth, sigma);
+      image = smooth;
+    }
+
+    let input = image;
+    let local = null;
+    let level = 0;
+    while (Math.max(input.width, input.height) > 1) {
+      const w = Math.max(1, Math.ceil(input.width / 4));
+      const h = Math.max(1, Math.ceil(input.height / 4));
+      const pooled = this.#scratchTarget(`stencil-pool-${level++}`, w, h);
+      this.#pass(this.programs.maxPool, pooled, { uTexel: [1 / input.width, 1 / input.height] }, { uTex: input.texture });
+      if (!local && Math.max(w, h) <= 32) local = pooled;
+      input = pooled;
+    }
+    local ??= input;
+    const smoothLocal = this.#scratchTarget('stencil-local', local.width, local.height);
+    const temp = this.#scratchTarget('stencil-local-temp', local.width, local.height);
+    this.#blur(local, temp, smoothLocal, 1.2);
+
+    this.#pass(this.programs.stencil, spare, stencilUniforms(settings, [1 / width, 1 / height]), {
+      uImage: image.texture,
+      uLocal: smoothLocal.texture,
+      uGlobal: input.texture,
+    });
+    return spare;
+  }
+
+  #lensBlur(texture, lens, processWidth, processHeight) {
+    const long = Math.max(processWidth, processHeight);
+    const textures = {};
+    for (const level of LENS_LEVELS) {
+      const workLong = Math.min(long, Math.round(level.pixels / level.sigma));
+      const w = Math.max(1, Math.round((processWidth * workLong) / long));
+      const h = Math.max(1, Math.round((processHeight * workLong) / long));
+      const a = this.#scratchTarget(`${level.name}-a`, w, h);
+      const b = this.#scratchTarget(`${level.name}-b`, w, h);
+      this.#pass(this.programs.bokeh, a, { uBoost: lens.bokeh / 100 }, { uTex: texture });
+      this.#blur(a, b, a, Math.max(0.5, level.sigma * workLong));
+      textures[level.name] = a.texture;
+    }
+    return textures;
+  }
+
+  // Separable gaussian: source → temp (horizontal) → destination (vertical).
+  #blur(source, temp, destination, sigma) {
+    this.#pass(this.programs.blur, temp, { uStep: [1 / temp.width, 0], uSigma: sigma }, { uTex: source.texture });
+    this.#pass(this.programs.blur, destination, { uStep: [0, 1 / destination.height], uSigma: sigma }, { uTex: temp.texture });
+  }
+
+  // Intermediate buffers reused from one frame to the next.
+  #scratchTarget(name, width, height) {
+    const key = `${name}:${width}x${height}`;
+    let target = this.scratch.get(key);
+    if (!target) {
+      target = this.#target(width, height);
+      this.scratch.set(key, target);
+      while (this.scratch.size > 48) {
+        const [oldest, stale] = this.scratch.entries().next().value;
+        disposeTarget(this.gl, stale);
+        this.scratch.delete(oldest);
+      }
+    }
+    return target;
   }
 
   #aspect() {
@@ -264,8 +359,7 @@ export class Renderer {
       const a = this.#target(w, h);
       const b = this.#target(w, h);
       this.#pass(this.programs.copy, a, {}, { uTex: base });
-      this.#pass(this.programs.blur, b, { uStep: [1 / w, 0], uSigma: sigma }, { uTex: a.texture });
-      this.#pass(this.programs.blur, a, { uStep: [0, 1 / h], uSigma: sigma }, { uTex: b.texture });
+      this.#blur(a, b, a, sigma);
       disposeTarget(gl, b);
       owned.push(a);
       blurs[level.name] = a.texture;
@@ -286,6 +380,8 @@ export class Renderer {
     this.masks.clear();
     for (const pair of this.targets.values()) pair.forEach((t) => disposeTarget(gl, t));
     this.targets.clear();
+    for (const target of this.scratch.values()) disposeTarget(gl, target);
+    this.scratch.clear();
     Object.values(this.programs).forEach((p) => p.dispose());
     if (this.source) gl.deleteTexture(this.source.texture);
     gl.deleteTexture(this.curve.texture);

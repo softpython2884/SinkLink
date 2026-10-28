@@ -164,6 +164,7 @@ uniform vec2 uLevelsOut;
 uniform float uSaturation;
 uniform float uVibrance;
 uniform float uStructure;
+uniform float uDehaze;
 uniform vec4 uHdr;
 uniform float uGlow;
 uniform bool uHslOn;
@@ -208,6 +209,33 @@ void main() {
   vec3 bs = develop(texture(uBlurS, vUv).rgb);
   vec3 bm = develop(texture(uBlurM, vUv).rgb);
   vec3 bl = develop(texture(uBlurL, vUv).rgb);
+
+  // Haze: the darkest channel says how much veil covers a pixel (dark channel
+  // prior). Removing it is (c - A·(1 - t)) / t. The estimate is mostly per
+  // pixel, a local average alone leaves bright halos around dark subjects.
+  // The blurred copies go through the same transform so that structure and
+  // HDR keep consistent inputs.
+  if (uDehaze != 0.0) {
+    float darkPixel = min(c.r, min(c.g, c.b));
+    float darkArea = min(bl.r, min(bl.g, bl.b));
+    float veil = clamp(mix(darkPixel, darkArea, 0.3), 0.0, 1.0);
+    vec3 air = vec3(0.95);
+    if (uDehaze > 0.0) {
+      float t = max(1.0 - 0.85 * uDehaze * veil, 0.2);
+      vec3 veilColor = air * (1.0 - t);
+      c = max((c - veilColor) / t, 0.0);
+      bs = max((bs - veilColor) / t, 0.0);
+      bm = max((bm - veilColor) / t, 0.0);
+      bl = max((bl - veilColor) / t, 0.0);
+    } else {
+      float k = -uDehaze * (0.2 + 0.5 * veil);
+      c = mix(c, air, k);
+      bs = mix(bs, air, k);
+      bm = mix(bm, air, k);
+      bl = mix(bl, air, k);
+    }
+  }
+
   float L0 = luma(c);
   float Ls = luma(bs);
   float Lm = luma(bm);
@@ -370,16 +398,95 @@ void main() {
 }
 `;
 
-// Geometry, sharpening, vignette and grain, in output space.
+// Lens blur input: brightening the highlights before blurring them gives the
+// glow of out-of-focus lights (bokeh).
+export const BOKEH = `${HEADER}
+uniform sampler2D uTex;
+uniform float uBoost;
+in vec2 vUv;
+out vec4 outColor;
+void main() {
+  vec4 c = texture(uTex, vUv);
+  c.rgb += uBoost * max(c.rgb - 0.85, 0.0) * 6.0;
+  outColor = c;
+}
+`;
+
+// Stencil background: each pass keeps the brightest value of 4×4 blocks, which
+// drops the ink and keeps the skin. Repeated down to a few pixels it gives the
+// lighting of the surface.
+export const MAX_POOL = `${HEADER}
+${COMMON}
+uniform sampler2D uTex;
+uniform vec2 uTexel;
+in vec2 vUv;
+out vec4 outColor;
+void main() {
+  float m = 0.0;
+  for (int y = 0; y < 4; y++) {
+    for (int x = 0; x < 4; x++) {
+      vec2 o = (vec2(float(x), float(y)) - 1.5) * uTexel;
+      m = max(m, luma(texture(uTex, vUv + o).rgb));
+    }
+  }
+  outColor = vec4(vec3(m), 1.0);
+}
+`;
+
+// Black and white line art: luminance relative to the local skin brightness,
+// optionally thickened or thinned, then thresholded with a soft edge.
+export const STENCIL = `${HEADER}
+${COMMON}
+uniform sampler2D uImage;
+uniform sampler2D uLocal;
+uniform sampler2D uGlobal;
+uniform vec2 uTexel;
+uniform float uThreshold;
+uniform float uThickness;
+uniform bool uTransparent;
+in vec2 vUv;
+out vec4 outColor;
+
+void main() {
+  float L = luma(texture(uImage, vUv).rgb);
+  if (uThickness != 0.0) {
+    float radius = abs(uThickness);
+    for (int i = 0; i < 12; i++) {
+      float a = float(i) * 0.5235988;
+      for (int r = 1; r <= 2; r++) {
+        vec2 o = vec2(cos(a), sin(a)) * uTexel * radius * float(r) * 0.5;
+        float s = luma(texture(uImage, vUv + o).rgb);
+        L = uThickness > 0.0 ? min(L, s) : max(L, s);
+      }
+    }
+  }
+  // The global floor keeps large black fills black: their own neighbourhood
+  // would otherwise be taken for skin.
+  float background = max(texture(uLocal, vUv).r, texture(uGlobal, vec2(0.5)).r * 0.45);
+  float level = L / max(background, 0.04);
+  float ink = 1.0 - smoothstep(uThreshold - 0.05, uThreshold + 0.05, level);
+  outColor = vec4(vec3(1.0 - ink), uTransparent ? ink : 1.0);
+}
+`;
+
+// Geometry, lens blur, chromatic aberration, sharpening, vignette and grain,
+// in output space.
 export const OUTPUT = `${HEADER}
 ${COMMON}
 uniform sampler2D uImage;
 uniform sampler2D uSrc;
+uniform sampler2D uLensNear;
+uniform sampler2D uLensFar;
 uniform mat3 uMatrix;
+uniform mat3 uWarp;
+uniform vec2 uBend;
 uniform bool uFlipY;
 uniform bool uOriginal;
 uniform vec2 uTexel;
 uniform float uSharpen;
+uniform vec4 uLens;
+uniform vec3 uLensFocus;
+uniform float uAberration;
 uniform vec4 uVignette;
 uniform vec2 uVignetteCenter;
 uniform vec2 uGrain;
@@ -387,6 +494,38 @@ uniform vec2 uOutSize;
 
 in vec2 vUv;
 out vec4 outColor;
+
+vec2 toSource(vec2 o) {
+  vec2 r = (uMatrix * vec3(o, 1.0)).xy;
+  if (uBend.x > 0.0) {
+    float k = sin(uBend.x);
+    if (uBend.y > 0.5) r.y = (sin((2.0 * r.y - 1.0) * uBend.x) / k + 1.0) * 0.5;
+    else r.x = (sin((2.0 * r.x - 1.0) * uBend.x) / k + 1.0) * 0.5;
+  }
+  vec3 w = uWarp * vec3(r, 1.0);
+  return w.xy / w.z;
+}
+
+// 0 inside the sharp zone, 1 where the blur is at its strongest.
+float defocus(vec2 o) {
+  vec2 d = (o - uLensFocus.xy) * vec2(uOutSize.x / uOutSize.y, 1.0);
+  float dist = uLens.w > 0.5
+    ? abs(dot(d, vec2(-sin(uLensFocus.z), cos(uLensFocus.z))))
+    : length(d);
+  return smoothstep(uLens.y, uLens.y + uLens.z, dist);
+}
+
+vec4 sampleImage(vec2 o) {
+  vec2 uv = toSource(o);
+  vec4 c = texture(uImage, uv);
+  if (uLens.x > 0.0) {
+    float r = defocus(o) * uLens.x * 2.0;
+    vec3 soft = texture(uLensNear, uv).rgb;
+    vec3 softer = texture(uLensFar, uv).rgb;
+    c.rgb = r < 1.0 ? mix(c.rgb, soft, r) : mix(soft, softer, r - 1.0);
+  }
+  return c;
+}
 
 float valueNoise(vec2 p) {
   vec2 i = floor(p);
@@ -401,22 +540,30 @@ float valueNoise(vec2 p) {
 
 void main() {
   vec2 o = vec2(vUv.x, uFlipY ? 1.0 - vUv.y : vUv.y);
-  vec2 uv = (uMatrix * vec3(o, 1.0)).xy;
 
   if (uOriginal) {
-    outColor = vec4(texture(uSrc, uv).rgb, 1.0);
+    outColor = vec4(texture(uSrc, toSource(o)).rgb, 1.0);
     return;
   }
 
-  vec3 c = texture(uImage, uv).rgb;
+  vec4 base = sampleImage(o);
+  vec3 c = base.rgb;
+
+  if (uAberration > 0.0) {
+    vec2 d = o - 0.5;
+    c.r = sampleImage(0.5 + d * (1.0 + uAberration)).r;
+    c.b = sampleImage(0.5 + d * (1.0 - uAberration)).b;
+  }
 
   if (uSharpen > 0.0) {
+    vec2 uv = toSource(o);
     vec3 n = texture(uImage, uv + vec2(uTexel.x, 0.0)).rgb
       + texture(uImage, uv - vec2(uTexel.x, 0.0)).rgb
       + texture(uImage, uv + vec2(0.0, uTexel.y)).rgb
       + texture(uImage, uv - vec2(0.0, uTexel.y)).rgb;
-    float d = luma(c) - luma(n) * 0.25;
-    c += d / (1.0 + abs(d) * 4.0) * uSharpen;
+    float d = luma(texture(uImage, uv).rgb) - luma(n) * 0.25;
+    float focus = uLens.x > 0.0 ? 1.0 - defocus(o) : 1.0;
+    c += d / (1.0 + abs(d) * 4.0) * uSharpen * focus;
   }
 
   if (uVignette.x != 0.0) {
@@ -434,6 +581,6 @@ void main() {
   }
 
   c += (hash(gl_FragCoord.xy) - 0.5) / 255.0;
-  outColor = vec4(clamp(c, 0.0, 1.0), 1.0);
+  outColor = vec4(clamp(c, 0.0, 1.0), base.a);
 }
 `;

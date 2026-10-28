@@ -4,6 +4,7 @@ import { h } from '../ui/dom.js';
 import { icon } from '../ui/icons.js';
 import { fitAspect, mirrorCrop, moveCrop, resizeCrop, rotateCrop } from '../render/geometry.js';
 import { DEFAULT_EDIT } from '../state/defaults.js';
+import { PerspectiveEditor } from './perspective.js';
 
 const RATIOS = [
   { id: 'free', label: 'Libre', ratio: null },
@@ -28,10 +29,11 @@ export class CropTool extends Tool {
     super(app, { id: 'crop', label: 'Recadrer', icon: 'crop' });
     this.drag = null;
     this.straightening = false;
+    this.perspective = new PerspectiveEditor(app, { onChange: () => this.sync(this.app.edit) });
   }
 
   renderOptions() {
-    return { frame: true };
+    return this.perspective.active ? { raw: true } : { frame: true };
   }
 
   get crop() {
@@ -112,6 +114,10 @@ export class CropTool extends Tool {
         this.angle.el,
       ),
       h('section', { class: 'section' },
+        h('h3', { class: 'section__title' }, 'Perspective'),
+        this.perspective.panel(),
+      ),
+      h('section', { class: 'section' },
         h('div', { class: 'panel__actions' },
           h('button', {
             class: 'btn btn--ghost',
@@ -128,6 +134,7 @@ export class CropTool extends Tool {
   sync(edit) {
     if (!this.angle) return;
     this.angle.set(edit.crop.angle);
+    this.perspective.sync();
     RATIOS.forEach((option, i) => {
       const value = option.ratio === null ? null : this.#ratioValue(option);
       const active = option.ratio === null
@@ -137,7 +144,9 @@ export class CropTool extends Tool {
     });
   }
 
-  overlay({ w, h }) {
+  overlay(view) {
+    if (this.perspective.active) return this.perspective.overlay(view);
+    const { w, h } = view;
     const { x, y, w: cw, h: ch, aspect } = this.crop;
     const rx = x * w;
     const ry = y * h;
@@ -200,6 +209,7 @@ export class CropTool extends Tool {
   }
 
   pointerDown(p, e) {
+    if (this.perspective.active) return this.perspective.pointerDown(p, e);
     if (e.button !== 0) return false;
     const handle = this.#hit(p);
     if (!handle) return false;
@@ -209,6 +219,7 @@ export class CropTool extends Tool {
   }
 
   pointerMove(p) {
+    if (this.perspective.active) return this.perspective.pointerMove(p);
     if (!this.drag) return;
     const { handle, start, rect } = this.drag;
     const { frameWidth, frameHeight } = this.#frame();
@@ -219,16 +230,19 @@ export class CropTool extends Tool {
   }
 
   pointerUp() {
+    if (this.perspective.active) return this.perspective.pointerUp();
     if (!this.drag) return;
     this.drag = null;
     this.app.commit();
   }
 
   hover(p) {
+    if (this.perspective.active) return this.perspective.hover(p);
     this.app.view.el.style.cursor = p ? CURSORS[this.#hit(p)] ?? '' : '';
   }
 
   unmount() {
+    this.perspective.stop();
     this.app.view.el.style.cursor = '';
   }
 }
