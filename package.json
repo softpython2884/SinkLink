@@ -1,0 +1,20 @@
+{
+  "name": "sinklink",
+  "version": "0.1.0",
+  "description": "Éditeur photo dans le navigateur, simple à prendre en main et précis.",
+  "type": "module",
+  "private": true,
+  "license": "AGPL-3.0-or-later",
+  "author": "NightFury <nightfury@nationquest.fr>",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/softpython2884/SinkLink.git"
+  },
+  "scripts": {
+    "start": "node scripts/serve.js",
+    "test": "node --test"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}
