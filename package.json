@@ -1,6 +1,6 @@
 {
   "name": "sinklink",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Éditeur photo dans le navigateur, simple à prendre en main et précis.",
   "type": "module",
   "private": true,

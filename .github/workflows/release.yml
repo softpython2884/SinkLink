@@ -1,0 +1,44 @@
+name: Release
+
+# Publishes a GitHub release for a version tag, with the matching section of
+# CHANGELOG.md as notes and a zip of the site ready to host.
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Tag to publish (e.g. v0.1.0)
+        required: true
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Extract release notes
+        env:
+          TAG: ${{ inputs.tag || github.ref_name }}
+        run: |
+          awk -v version="${TAG#v}" '
+            /^## \[/ { if (found) exit; found = index($0, "[" version "]") > 0; next }
+            /^\[[^]]+\]: / { if (found) exit }
+            found
+          ' CHANGELOG.md > notes.md
+          test -s notes.md || { echo "No CHANGELOG.md entry for $TAG" >&2; exit 1; }
+
+      - name: Publish
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ inputs.tag || github.ref_name }}
+        run: |
+          git archive --format=zip --prefix="sinklink-$TAG/" -o "sinklink-$TAG.zip" "$TAG" \
+            index.html styles src assets LICENSE README.md
+          gh release create "$TAG" "sinklink-$TAG.zip" \
+            --verify-tag --title "SinkLink $TAG" --notes-file notes.md
