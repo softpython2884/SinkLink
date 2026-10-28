@@ -1,0 +1,43 @@
+// 24×24 stroke icons.
+const PATHS = {
+  open: '<path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>',
+  image: '<rect x="3" y="4" width="18" height="16" rx="2"/><circle cx="8.5" cy="9.5" r="1.5"/><path d="m21 16-5-5-9 9"/>',
+  undo: '<path d="M9 14 4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11"/>',
+  redo: '<path d="m15 14 5-5-5-5"/><path d="M20 9H9.5a5.5 5.5 0 0 0 0 11H13"/>',
+  compare: '<rect x="3" y="4" width="18" height="16" rx="2"/><path d="M12 2v20"/><path d="M12 4h7a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2h-7z" fill="currentColor" stroke="none" opacity=".35"/>',
+  download: '<path d="M12 3v12"/><path d="m7 10 5 5 5-5"/><path d="M5 21h14"/>',
+  looks: '<circle cx="8.5" cy="9" r="5"/><circle cx="15.5" cy="9" r="5"/><circle cx="12" cy="15" r="5"/>',
+  tune: '<path d="M4 6h10M18 6h2M4 12h4M12 12h8M4 18h12"/><circle cx="16" cy="6" r="2"/><circle cx="10" cy="12" r="2"/><circle cx="18" cy="18" r="2"/>',
+  details: '<path d="M12 4 21 19H3z"/><path d="M8.6 14h6.8"/>',
+  curves: '<rect x="3" y="3" width="18" height="18" rx="2"/><path d="M6 18c5 0 5-12 12-12"/>',
+  color: '<path d="M12 3.5c3.5 4.2 6 7.4 6 10.5a6 6 0 0 1-12 0c0-3.1 2.5-6.3 6-10.5z"/>',
+  hdr: '<path d="m2.5 19 6.5-9 4.5 6 3-3.5 5 6.5z"/><circle cx="16.5" cy="6.5" r="2.5"/>',
+  effects: '<rect x="3" y="4" width="18" height="16" rx="2"/><ellipse cx="12" cy="12" rx="5.5" ry="4"/>',
+  bw: '<circle cx="12" cy="12" r="8.5"/><path d="M12 3.5a8.5 8.5 0 0 1 0 17z" fill="currentColor" stroke="none"/>',
+  crop: '<path d="M6 2v14a2 2 0 0 0 2 2h14"/><path d="M18 22V8a2 2 0 0 0-2-2H2"/>',
+  local: '<circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="2.5"/><path d="M12 1.5v3M12 19.5v3M1.5 12h3M19.5 12h3"/>',
+  heal: '<path d="M8.5 20.5 3.5 15.5a3 3 0 0 1 0-4.2l7.8-7.8a3 3 0 0 1 4.2 0l5 5a3 3 0 0 1 0 4.2l-7.8 7.8a3 3 0 0 1-4.2 0z"/><path d="M10.5 12h.01M12 10.5h.01M13.5 12h.01M12 13.5h.01"/>',
+  auto: '<path d="m4 20 10-10"/><path d="m15 3 1.1 2.4L18.5 6.5 16.1 7.6 15 10l-1.1-2.4L11.5 6.5l2.4-1.1z"/><path d="M19.5 12.5v3M18 14h3"/>',
+  point: '<circle cx="12" cy="12" r="2.5"/><circle cx="12" cy="12" r="8" stroke-dasharray="2.5 3"/>',
+  brush: '<path d="M14.6 4.4a2.2 2.2 0 0 1 3.1 0l1.9 1.9a2.2 2.2 0 0 1 0 3.1L12 17l-5-5z"/><path d="M7 12c-2.4 0-4 1.8-4 4 0 1.4-.5 2.6-1 3.5 3.6 0 8-.9 8-4.5"/>',
+  gradient: '<path d="M7 6h10" opacity=".35"/><path d="M5 10h14" opacity=".55"/><path d="M4 14h16" opacity=".8"/><path d="M3 18h18"/>',
+  eraser: '<path d="m7 20-3.6-3.6a1.6 1.6 0 0 1 0-2.3l9.6-9.6a1.6 1.6 0 0 1 2.3 0l5.2 5.2a1.6 1.6 0 0 1 0 2.3L12.5 20"/><path d="M21 20H7"/><path d="m5.5 11.5 7 7"/>',
+  trash: '<path d="M4 7h16"/><path d="M10 11v6M14 11v6"/><path d="m6 7 1 13h10l1-13"/><path d="M9 7V4h6v3"/>',
+  plus: '<path d="M12 5v14M5 12h14"/>',
+  minus: '<path d="M5 12h14"/>',
+  rotateLeft: '<path d="M3 3v6h6"/><path d="M3.6 9a9 9 0 1 1 2.1 9.4"/>',
+  rotateRight: '<path d="M21 3v6h-6"/><path d="M20.4 9a9 9 0 1 0-2.1 9.4"/>',
+  mirror: '<path d="M12 3v18"/><path d="M8 7 3 12l5 5z"/><path d="m16 7 5 5-5 5z"/>',
+  swap: '<rect x="3" y="8" width="11" height="13" rx="1.5"/><path d="M14 4h3.5A2.5 2.5 0 0 1 20 6.5V11"/><path d="m17.5 8.5 2.5 2.5 2.5-2.5"/>',
+  eye: '<path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/>',
+  invert: '<rect x="3" y="3" width="18" height="18" rx="3"/><circle cx="12" cy="12" r="4.5" fill="currentColor"/>',
+  duplicate: '<rect x="8" y="8" width="13" height="13" rx="2"/><path d="M16 8V5a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h3"/>',
+  reset: '<path d="M3 12a9 9 0 1 0 2.7-6.4L3 8"/><path d="M3 3v5h5"/>',
+  fit: '<path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/>',
+  close: '<path d="m6 6 12 12M18 6 6 18"/>',
+  code: '<path d="m8 8-5 4 5 4M16 8l5 4-5 4M14 4l-4 16"/>',
+};
+
+export function icon(name, className = 'icon') {
+  return `<svg class="${className}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${PATHS[name] ?? ''}</svg>`;
+}

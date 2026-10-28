@@ -1,0 +1,132 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>SinkLink · Éditeur photo</title>
+  <meta name="description" content="Éditeur photo dans le navigateur : réglages, courbes, HDR, styles, retouches locales et correcteur. Rien n'est envoyé sur un serveur.">
+  <meta name="theme-color" content="#0f1012">
+  <link rel="icon" href="assets/icon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="styles/app.css">
+  <script type="module" src="src/main.js"></script>
+</head>
+<body>
+  <div class="app">
+    <header class="topbar">
+      <div class="brand">
+        <img class="brand__logo" src="assets/icon.svg" alt="" width="26" height="26">
+        <span class="brand__name">SinkLink</span>
+        <span class="file-name"></span>
+      </div>
+      <div class="topbar__actions">
+        <button class="btn btn--ghost" type="button" data-action="open" title="Ouvrir une photo (Ctrl+O)">
+          <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>
+          <span class="btn__label">Ouvrir</span>
+        </button>
+        <span class="divider" aria-hidden="true"></span>
+        <button class="btn btn--icon" type="button" data-action="undo" title="Annuler (Ctrl+Z)" aria-label="Annuler">
+          <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 14 4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11"/></svg>
+        </button>
+        <button class="btn btn--icon" type="button" data-action="redo" title="Rétablir (Ctrl+Maj+Z)" aria-label="Rétablir">
+          <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m15 14 5-5-5-5"/><path d="M20 9H9.5a5.5 5.5 0 0 0 0 11H13"/></svg>
+        </button>
+        <button class="btn btn--icon needs-image" type="button" data-action="compare" title="Maintenir pour voir l’original (C)" aria-label="Comparer avec l’original">
+          <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M12 2v20"/><path d="M12 4h7a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2h-7z" fill="currentColor" stroke="none" opacity=".35"/></svg>
+        </button>
+        <span class="divider" aria-hidden="true"></span>
+        <button class="btn btn--primary needs-image" type="button" data-action="export" title="Exporter (Ctrl+S)">
+          <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12"/><path d="m7 10 5 5 5-5"/><path d="M5 21h14"/></svg>
+          <span class="btn__label">Exporter</span>
+        </button>
+      </div>
+    </header>
+
+    <main class="workspace">
+      <section class="viewport" aria-label="Photo">
+        <div class="stage">
+          <canvas></canvas>
+          <svg class="overlay" xmlns="http://www.w3.org/2000/svg"></svg>
+        </div>
+        <div class="hud" aria-live="polite"></div>
+        <div class="badge-original">Original</div>
+
+        <div class="welcome">
+          <img class="welcome__logo" src="assets/icon.svg" alt="" width="56" height="56">
+          <h1 class="welcome__title">Retouchez vos photos, simplement.</h1>
+          <p class="welcome__text">Glissez une photo ici, collez-la (Ctrl+V) ou ouvrez-la depuis votre appareil. Tout se passe dans votre navigateur, rien n’est envoyé.</p>
+          <button class="btn btn--primary btn--large" type="button" data-action="open">Ouvrir une photo</button>
+        </div>
+        <div class="dropzone" aria-hidden="true"><span>Déposez la photo pour l’ouvrir</span></div>
+        <div class="loader" aria-hidden="true"></div>
+
+        <div class="unsupported">
+          <h1>Votre navigateur ne peut pas faire tourner SinkLink</h1>
+          <p>SinkLink a besoin de WebGL 2, disponible sur les versions récentes de Chrome, Edge, Firefox et Safari.</p>
+          <p class="unsupported__detail"></p>
+        </div>
+
+        <div class="zoom needs-image">
+          <button class="btn btn--icon" type="button" data-action="zoom-out" title="Zoom arrière (−)" aria-label="Zoom arrière">
+            <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" aria-hidden="true"><path d="M5 12h14"/></svg>
+          </button>
+          <button class="btn zoom__value" type="button" data-action="zoom-fit" title="Ajuster à l’écran (0)">100 %</button>
+          <button class="btn btn--icon" type="button" data-action="zoom-in" title="Zoom avant (+)" aria-label="Zoom avant">
+            <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
+          </button>
+        </div>
+      </section>
+
+      <aside class="sidebar">
+        <canvas class="histogram" aria-hidden="true"></canvas>
+        <nav class="tools" aria-label="Outils"></nav>
+        <section class="panel">
+          <h2 class="panel__title"></h2>
+          <div class="panel__body"></div>
+        </section>
+        <footer class="sidebar__footer">
+          <span>SinkLink · AGPL-3.0</span>
+          <a href="https://github.com/softpython2884/SinkLink" target="_blank" rel="noopener">Code source</a>
+        </footer>
+      </aside>
+    </main>
+
+    <input type="file" accept="image/*" hidden>
+  </div>
+
+  <dialog class="export-dialog">
+    <form method="dialog" class="export">
+      <h2 class="export__title">Exporter la photo</h2>
+
+      <fieldset class="field">
+        <legend class="field__label">Format</legend>
+        <div class="segmented">
+          <label class="segmented__item"><input type="radio" name="format" value="jpeg" checked><span>JPEG</span></label>
+          <label class="segmented__item"><input type="radio" name="format" value="webp"><span>WebP</span></label>
+          <label class="segmented__item"><input type="radio" name="format" value="png"><span>PNG</span></label>
+        </div>
+      </fieldset>
+
+      <div class="field export__quality">
+        <label class="field__label" for="export-quality">Qualité <output class="export__quality-value">92 %</output></label>
+        <input id="export-quality" type="range" name="quality" min="50" max="100" value="92">
+      </div>
+
+      <div class="field">
+        <label class="field__label" for="export-size">Taille</label>
+        <select id="export-size" name="size" class="select">
+          <option value="full">Originale</option>
+          <option value="4096">4096 px max</option>
+          <option value="2048">2048 px max</option>
+          <option value="1080">1080 px max</option>
+        </select>
+        <span class="export__dimensions"></span>
+      </div>
+
+      <div class="export__actions">
+        <button class="btn btn--ghost" type="submit" value="cancel" formnovalidate>Annuler</button>
+        <button class="btn btn--primary" type="submit" value="export">Exporter</button>
+      </div>
+    </form>
+  </dialog>
+</body>
+</html>
