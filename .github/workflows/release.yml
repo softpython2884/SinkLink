@@ -1,15 +1,20 @@
 name: Release
 
-# Publishes a GitHub release for a version tag, with the matching section of
-# CHANGELOG.md as notes and a zip of the site ready to host.
+# Publishes a GitHub release for a version, with the matching section of
+# CHANGELOG.md as notes and a zip of the site ready to host. Runs when a version
+# tag is pushed, or by hand, in which case the tag is created on `target`.
 on:
   push:
     tags: ['v*']
   workflow_dispatch:
     inputs:
       tag:
-        description: Tag to publish (e.g. v0.1.0)
+        description: Version tag (e.g. v0.2.0)
         required: true
+      target:
+        description: Branch or full commit SHA to tag
+        required: true
+        default: main
 
 permissions:
   contents: write
@@ -37,8 +42,10 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           TAG: ${{ inputs.tag || github.ref_name }}
+          TARGET: ${{ inputs.target || github.sha }}
         run: |
-          git archive --format=zip --prefix="sinklink-$TAG/" -o "sinklink-$TAG.zip" "$TAG" \
+          commit=$(git rev-parse --verify "$TARGET^{commit}")
+          git archive --format=zip --prefix="sinklink-$TAG/" -o "sinklink-$TAG.zip" "$commit" \
             index.html styles src assets LICENSE README.md
           gh release create "$TAG" "sinklink-$TAG.zip" \
-            --verify-tag --title "SinkLink $TAG" --notes-file notes.md
+            --target "$commit" --title "SinkLink $TAG" --notes-file notes.md
